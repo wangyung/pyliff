@@ -2,7 +2,7 @@
 
 import sys
 from string import Template
-from liffclient import LiffClient
+from pyliff import LiffClient
 
 
 TOKEN_USAGE = """  liff token add <name> <token>                     Add new access token, the new token will be the default token

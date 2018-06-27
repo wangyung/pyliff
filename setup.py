@@ -28,11 +28,11 @@ setup_info = dict(
 
     # Package info
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
-    package_data={'': ['liff']},
     include_package_data=True,
     install_requires=[
         "requests",
     ],
+    scripts=["bin/liff"],
 
     # Add _ prefix to the names of temporary build dirs
     options={
