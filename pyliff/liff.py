@@ -89,40 +89,113 @@ class LiffClient:
 
             print(output)
 
-    def create_liff_app(self, url, size):
-        if not self._verify_size(size):
+    def create_app(self, url, size):
+        if not self._verify_view_size(size):
             print("The value of size is incorrect, it must be 'full', 'tall' or 'compact'")
             return
 
+        def success_handler(json):
+            print("Create LIFF app successfully, id: " + json[KEY_LIFF_ID])
+
+        def error_handler(json):
+            print("Could not create LIFF app. Reason: " + json[KEY_MESSAGE])
+            sys.exit(1)
+
         payload = {KEY_VIEW: {KEY_TYPE: size, KEY_URL: url}}
         response = requests.post(LIFF_BASE_URL, headers=self._default_headers(), json=payload)
-        json_response = json.loads(response.text)
-        if response.status_code != 200:
-            print("Could not create LIFF app. Reason: " + json_response[KEY_MESSAGE])
+        self._handle_response(response, success_handler, error_handler)
+
+    def delete_app(self, liff_id):
+
+        def success_handler(json):
+            print("Delete LIFF app successfully")
+
+        def error_handler(json):
+            print("Could not delete LIFF app. Reason: " + json[KEY_MESSAGE])
             sys.exit(1)
-        else:
-            print("Create LIFF app successfully, id: " + json_response[KEY_LIFF_ID])
 
-    def delete(self, liffId):
-        """"""
+        response = requests.delete(LIFF_BASE_URL + "/{0}".format(liff_id), headers=self._default_headers())
+        self._handle_response(response, success_handler, error_handler)
 
-    def update(self, liffId):
-        """"""
-    def list(self):
+    def update_app(self, liff_id, properties):
+        if not properties:
+            print("The new value is empty, skip")
+            return
+
+        def success_handler(json):
+            print("Update successfully")
+
+        def error_handler(json):
+            print("Cannot update LIFF app. Reason: " + json[KEY_MESSAGE])
+            sys.exit(1)
+
+        payload = self._generate_json_for_update(properties)
+        response = requests.put(
+            LIFF_BASE_URL + "/{0}/view".format(liff_id),
+            headers=self._default_headers(),
+            json=payload
+        )
+        self._handle_response(response, success_handler, error_handler)
+
+    def _generate_json_for_update(self, properties):
+        new_properties = properties.split(",")
+        new_values = {}
+        for property in new_properties:
+            key_value = property.strip().split(":", maxsplit=1)
+            if len(key_value) != 2:
+                print("Incorrect value format for updating liff application")
+                sys.exit(1)
+            key = key_value[0].strip()
+            value = key_value[1].strip()
+            if self._verify_key_and_value(key, value):
+                new_values[key] = value
+
+        return new_values
+
+    def _verify_key_and_value(self, key, value):
+        if not key == KEY_TYPE and not key == KEY_URL:
+            return False
+        if key == KEY_TYPE and not self._verify_view_size(value):
+            print("The value of size is incorrect, it must be 'full', 'tall' or 'compact'")
+            sys.exit(1)
+
+        return True
+
+    def list_all_apps(self):
         response_template = Template(APP_INFO_TEMPLATE)
         response = requests.get(LIFF_BASE_URL, headers=self._default_headers())
-        json_response = json.loads(response.text)
-        apps = json_response[KEY_APPS]
-        for app in apps:
-            print(response_template.substitute(
-                liff_id=app[KEY_LIFF_ID], view_type=app[KEY_VIEW][KEY_TYPE], url=app[KEY_VIEW][KEY_URL]))
 
-    def _verify_size(self, size):
+        def success_handler(json):
+            if KEY_APPS not in json:
+                print("No LIFF application now, use 'liff create' to create a new LIFF application.")
+
+            apps = json[KEY_APPS]
+            for app in apps:
+                print(response_template.substitute(
+                    liff_id=app[KEY_LIFF_ID], view_type=app[KEY_VIEW][KEY_TYPE], url=app[KEY_VIEW][KEY_URL]))
+
+        def error_handler(json):
+            print("Could not list LIFF app. Reason: " + json[KEY_MESSAGE])
+            sys.exit(1)
+
+        self._handle_response(response, success_handler, error_handler)
+
+    def _verify_view_size(self, size):
         return size == "full" or size == "compact" or size == "tall"
 
     def _default_headers(self):
         return {"Authorization": "Bearer " + self.default_token,
                 "Content-Type": "application/json"}
+
+    def _handle_response(self, response, success_handler, error_handler):
+        try:
+            json_response = json.loads(response.text)
+        except json.JSONDecodeError:
+            json_response = ""
+        if response.status_code != 200:
+            error_handler(json_response)
+        else:
+            success_handler(json_response)
 
 
 APP_INFO_TEMPLATE = """
@@ -130,16 +203,18 @@ APP_INFO_TEMPLATE = """
   viewType: $view_type,
   url: $url"""
 
-TOKEN_USAGE = """  liff token add <name> <token>       Add new access token, the new token will be the default token
-  liff token delete <name>            Delete the access token. If it is default token, the last added token would become default token
-  liff token set-default <name>       Set the default token       
-  liff token list                     List all tokens
+TOKEN_USAGE = """  liff token add <name> <token>                        Add new access token, the new token will be the default token
+  liff token delete <name>                             Delete the access token. If it is default token, the last added token would become default token
+  liff token set-default <name>                        Set the default token       
+  liff token list                                      List all tokens
 """
 
-LIFF_APP_USAGE = """  liff create[c] <url> <type>[compact, tall, full]
-  liff list[l]
-  liff delete[d] <liff_id>
-  liff update[u] <liff_id> json_of_items_to_change
+LIFF_APP_USAGE = """  liff create[c] <url> <type>[compact, tall, full]     Create a new LIFF application.
+  liff list[l]                                         List all LIFF applications
+  liff delete[d] <id>                                  Delete a LIFF application.
+  liff update[u] <id> <new_values>                     Update the LIFF application with new values. The value format is PROPERTY:VALUE and use the comma to seperate each value
+  Example: 
+      liff update 1234567 url:https://test.com,type:full
 """
 
 ALL_USAGE = Template("""usage: liff <command> [<args>]
@@ -172,18 +247,29 @@ def run_command(command, args):
             return
 
         run_token_command(client, args[0], args[1:])
+
     elif command == "list" or command == "l":
-        liffs = client.list()
+        client.list_all_apps()
+
     elif command == "create" or command == "c":
         if len(args) < 2:
             print("usage:\n" + LIFF_APP_USAGE)
             return
 
-        client.create_liff_app(url=args[0], size=args[1])
+        client.create_app(url=args[0], size=args[1])
+
     elif command == "delete" or command == "d":
-        client.delete(sys.argv[2])
-    elif command == 'update' or command == "u" and len(args) == 3:
-        client.update(sys.argv[2])
+        if len(args) < 1:
+            print("usage:\n" + LIFF_APP_USAGE)
+            return
+        client.delete_app(args[0])
+
+    elif command == "update" or command == "u":
+        if len(args) < 2:
+            print("usage:\n" + LIFF_APP_USAGE)
+            return
+
+        client.update_app(liff_id=args[0], properties=args[1])
     else:
         print(ALL_USAGE)
 
