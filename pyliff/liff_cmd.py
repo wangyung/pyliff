@@ -23,9 +23,6 @@ Token management commands:
 $token_usage
 App management commands
 $liff_app_usage
-
-usage:
-liff cmd [cmd_opts]
 """).substitute(token_usage=TOKEN_USAGE, liff_app_usage=LIFF_APP_USAGE)
 
 
