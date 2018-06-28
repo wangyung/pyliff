@@ -33,7 +33,7 @@ class LiffClient:
             self._load_settings()
             self.default_token = self.tokens[self.default]
         except Exception as error:
-            """"""
+            self.default_token = ""
 
     def _load_settings(self):
         with open(self.setting_file, "r") as json_file:
@@ -168,6 +168,10 @@ class LiffClient:
         return True
 
     def list_all_apps(self):
+        if not self.default_token:
+            print("Please set access token first, run liff token add <name> <token>")
+            sys.exit(1)
+
         response_template = Template(APP_INFO_TEMPLATE)
         response = requests.get(LIFF_BASE_URL, headers=self._default_headers())
 
